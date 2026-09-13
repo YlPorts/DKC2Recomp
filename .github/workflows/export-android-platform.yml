@@ -1,0 +1,28 @@
+name: Export Android platform
+on:
+  workflow_dispatch:
+  push:
+    branches: ['android/initial-port']
+    paths: ['.github/workflows/export-android-platform.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Stage Android API 35 jar
+        run: |
+          set -euo pipefail
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          cp "$ANDROID_HOME/platforms/android-35/android.jar" android-35.jar
+          sha256sum android-35.jar > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-platform-35-jar
+          path: |
+            android-35.jar
+            SHA256SUMS
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
