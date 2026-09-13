@@ -1,0 +1,40 @@
+name: Export Android toolchain
+on:
+  workflow_dispatch:
+  push:
+    branches: ['android/initial-port']
+    paths: ['.github/workflows/export-android-toolchain.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Package NDK r28c and Build Tools 35
+        env:
+          NDK_VERSION: '28.2.13676358'
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/$NDK_VERSION"
+          test -f "$NDK/build/cmake/android.toolchain.cmake"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          mkdir -p "$RUNNER_TEMP/toolchain/android-sdk/build-tools" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION"
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" "$RUNNER_TEMP/toolchain/android-sdk/build-tools/"
+          cp -a "$NDK/build" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
+          cp -a "$NDK/meta" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
+          cp -a "$NDK/toolchains" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
+          cp -a "$NDK/source.properties" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
+          du -sh "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION" "$RUNNER_TEMP/toolchain/android-sdk/build-tools/35.0.0"
+          tar -C "$RUNNER_TEMP/toolchain" -I 'zstd -3 -T0' -cf android-toolchain-r28c-bt35.tar.zst android-sdk
+          sha256sum "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst" > "$RUNNER_TEMP/toolchain/SHA256SUMS"
+          ls -lh "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-toolchain-r28c-bt35-linux
+          path: |
+            ${{ runner.temp }}/toolchain/android-toolchain-r28c-bt35.tar.zst
+            ${{ runner.temp }}/toolchain/SHA256SUMS
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
