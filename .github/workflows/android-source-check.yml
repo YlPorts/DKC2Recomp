@@ -24,13 +24,37 @@ jobs:
           ANDROID_NDK_VERSION: '28.2.13676358'
         run: |
           set -euo pipefail
-          # Use the NDK installed on the verified ubuntu-24.04 runner image.
-          # The system CMake meets our >=3.22 source-check requirement.
           test -f "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION/build/cmake/android.toolchain.cmake"
           cmake -S "$RUNNER_TEMP/dkc2-android/android/native" -B "$RUNNER_TEMP/host-check" -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DDKC2_ANDROID_SOURCE_CHECK=ON
           cmake --build "$RUNNER_TEMP/host-check" --target android_host_check -j2
+      - name: Package public Android toolchain
+        if: success()
+        env:
+          ANDROID_NDK_VERSION: '28.2.13676358'
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          mkdir -p "$RUNNER_TEMP/toolchain/android-sdk/build-tools" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$ANDROID_NDK_VERSION"
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" "$RUNNER_TEMP/toolchain/android-sdk/build-tools/"
+          cp -a "$NDK/build" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$ANDROID_NDK_VERSION/"
+          cp -a "$NDK/meta" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$ANDROID_NDK_VERSION/"
+          cp -a "$NDK/toolchains" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$ANDROID_NDK_VERSION/"
+          cp -a "$NDK/source.properties" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$ANDROID_NDK_VERSION/"
+          tar -C "$RUNNER_TEMP/toolchain" -I 'zstd -3 -T0' -cf "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst" android-sdk
+          sha256sum "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst" > "$RUNNER_TEMP/toolchain/SHA256SUMS"
+          ls -lh "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: android-toolchain-r28c-bt35-linux
+          path: |
+            ${{ runner.temp }}/toolchain/android-toolchain-r28c-bt35.tar.zst
+            ${{ runner.temp }}/toolchain/SHA256SUMS
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
       - name: Archive source only
         if: success()
         run: |
