@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Package NDK r28c and Build Tools 35
+      - name: Package and split NDK r28c and Build Tools 35
         env:
           NDK_VERSION: '28.2.13676358'
         run: |
@@ -25,15 +25,32 @@ jobs:
           cp -a "$NDK/meta" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
           cp -a "$NDK/toolchains" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
           cp -a "$NDK/source.properties" "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION/"
-          du -sh "$RUNNER_TEMP/toolchain/android-sdk/ndk/$NDK_VERSION" "$RUNNER_TEMP/toolchain/android-sdk/build-tools/35.0.0"
-          tar -C "$RUNNER_TEMP/toolchain" -I 'zstd -3 -T0' -cf android-toolchain-r28c-bt35.tar.zst android-sdk
+          tar -C "$RUNNER_TEMP/toolchain" -I 'zstd -3 -T0' -cf "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst" android-sdk
           sha256sum "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst" > "$RUNNER_TEMP/toolchain/SHA256SUMS"
-          ls -lh "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst"
+          split -b 300M -d -a 2 "$RUNNER_TEMP/toolchain/android-toolchain-r28c-bt35.tar.zst" "$RUNNER_TEMP/toolchain/toolchain.part-"
+          test -f "$RUNNER_TEMP/toolchain/toolchain.part-00"
+          test -f "$RUNNER_TEMP/toolchain/toolchain.part-01"
+          test -f "$RUNNER_TEMP/toolchain/toolchain.part-02"
+          ls -lh "$RUNNER_TEMP/toolchain"/toolchain.part-* "$RUNNER_TEMP/toolchain/SHA256SUMS"
       - uses: actions/upload-artifact@v4
         with:
-          name: android-toolchain-r28c-bt35-linux
+          name: android-toolchain-r28c-bt35-part-00
+          path: ${{ runner.temp }}/toolchain/toolchain.part-00
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-toolchain-r28c-bt35-part-01
+          path: ${{ runner.temp }}/toolchain/toolchain.part-01
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-toolchain-r28c-bt35-part-02
           path: |
-            ${{ runner.temp }}/toolchain/android-toolchain-r28c-bt35.tar.zst
+            ${{ runner.temp }}/toolchain/toolchain.part-02
             ${{ runner.temp }}/toolchain/SHA256SUMS
           compression-level: 0
           if-no-files-found: error
