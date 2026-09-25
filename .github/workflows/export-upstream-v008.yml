@@ -1,0 +1,40 @@
+name: Export DKC2 upstream v0.0.8 source
+on:
+  push:
+    branches: ['android/initial-port']
+    paths: ['.github/workflows/export-upstream-v008.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: elliotttate/DKC2Recomp
+          ref: 3b386cb4a6b67472bc6693664ce61a11190e7b5d
+          submodules: recursive
+          path: upstream
+      - name: Archive source without private/generated content
+        run: |
+          set -euo pipefail
+          rm -rf upstream/.git upstream/generated upstream/private upstream/build upstream/build-* upstream/versions
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('upstream')
+          with zipfile.ZipFile('DKC2Recomp-v0.0.8-source-with-submodules.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in root.rglob('*'):
+                  if p.is_file() and '.git' not in p.parts:
+                      z.write(p, Path('DKC2Recomp-v0.0.8')/p.relative_to(root))
+          PY
+          sha256sum DKC2Recomp-v0.0.8-source-with-submodules.zip
+          ls -lh DKC2Recomp-v0.0.8-source-with-submodules.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DKC2Recomp-v0.0.8-source-with-submodules
+          path: DKC2Recomp-v0.0.8-source-with-submodules.zip
+          compression-level: 0
+          retention-days: 1

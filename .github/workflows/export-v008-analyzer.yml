@@ -1,0 +1,36 @@
+name: Export v0.0.8 native analyzer
+on:
+  push:
+    branches: ['android/initial-port']
+    paths: ['.github/workflows/export-v008-analyzer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: elliotttate/snesrecomp
+          ref: 3a929cd30336f2b3a077df17912719be63142299
+          path: snesrecomp
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build exact native analyzer
+        working-directory: snesrecomp
+        run: |
+          set -euo pipefail
+          python tools/build_native_analyzer.py
+          test -x recompiler-rs/target/release/snesrecomp-analyze
+          sha256sum recompiler-rs/target/release/snesrecomp-analyze > ../SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snesrecomp-v008-analyzer-linux-x86_64
+          path: |
+            snesrecomp/recompiler-rs/target/release/snesrecomp-analyze
+            SHA256SUMS
+          compression-level: 0
+          retention-days: 1

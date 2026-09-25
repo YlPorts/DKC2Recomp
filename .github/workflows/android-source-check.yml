@@ -1,0 +1,53 @@
+name: Android source checks (no ROM)
+on:
+  push:
+    branches: ['android/initial-port']
+    paths: ['android_port/**', '.github/workflows/android-source-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic migration tests
+        run: python -m unittest discover -s android_port/tests -v
+      - name: Prepare pinned Android source and dependencies without a ROM
+        run: python android_port/bootstrap.py --output "$RUNNER_TEMP/dkc2-android" --dependencies
+      - name: Source-only native interface check
+        env:
+          ANDROID_NDK_VERSION: '28.2.13676358'
+        run: |
+          set -euo pipefail
+          # Use the NDK installed on the verified ubuntu-24.04 runner image.
+          # The system CMake meets our >=3.22 source-check requirement.
+          test -f "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION/build/cmake/android.toolchain.cmake"
+          cmake -S "$RUNNER_TEMP/dkc2-android/android/native" -B "$RUNNER_TEMP/host-check" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DDKC2_ANDROID_SOURCE_CHECK=ON
+          cmake --build "$RUNNER_TEMP/host-check" --target android_host_check -j2
+      - name: Archive source only
+        if: success()
+        run: |
+          python - <<'PY'
+          import os, pathlib, zipfile
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])/'dkc2-android'
+          with zipfile.ZipFile('DKC2Recomp-Android-source.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+              for p in root.rglob('*'):
+                  rel = p.relative_to(root)
+                  if not p.is_file() or '.git' in rel.parts or any(x in rel.parts for x in ('.cache', '__pycache__', 'generated', 'build', '.cxx', '.gradle')):
+                      continue
+                  z.write(p, pathlib.Path('DKC2Recomp-Android')/rel)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: DKC2Recomp-Android-source-only
+          path: DKC2Recomp-Android-source.zip
+          if-no-files-found: error
+          retention-days: 7
